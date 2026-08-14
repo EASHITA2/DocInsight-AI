@@ -1,6 +1,8 @@
 import os
 import json
 import tempfile
+import base64
+from pathlib import Path
 import fitz
 import streamlit as st
 from dotenv import load_dotenv
@@ -15,11 +17,22 @@ from langchain_huggingface import HuggingFaceEmbeddings
 # Page Config
 # ==========================================================
 
+ASSET_DIR = Path(__file__).parent / "assets"
+LOGO_PATH = ASSET_DIR / "docinsight_logo.png"
+
 st.set_page_config(
     page_title="DocInsight AI",
-    page_icon="📄",
-    layout="wide"
+    page_icon="✨",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+def image_to_data_uri(path: Path) -> str:
+    if not path.exists():
+        return ""
+    encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
+    return f"data:image/png;base64,{encoded}"
+
 
 # ==========================================================
 # Load Gemini
@@ -93,11 +106,29 @@ def render_grouped_sources(source_items, heading="📚 Sources"):
 
 
 # ==========================================================
-# Theme State
+# Session State
 # ==========================================================
 
-if "dark_mode" not in st.session_state:
-    st.session_state.dark_mode = True
+defaults = {
+    "dark_mode": True,
+    "messages": [],
+    "suggested_questions": [],
+    "selected_question": None,
+    "generate_summary": False,
+    "summary": "",
+    "generate_practice": False,
+    "practice_questions": "",
+    "practice_answers": "",
+    "show_practice_answers": False,
+    "practice_data": [],
+    "practice_index": 0,
+    "practice_results": [],
+    "practice_submitted": False,
+}
+
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 
 # ==========================================================
@@ -108,19 +139,12 @@ with st.sidebar:
     # ======================================================
     # Branding
     # ======================================================
-    st.markdown("""
-    <div style="padding: 8px 0 5px 0;">
-        <h2 style="margin-bottom: 2px;">📄 DocInsight AI</h2>
-        <p style="
-            color: #6b7280;
-            font-size: 13px;
-            margin-top: 0;
-        ">
-            Your AI document learning assistant
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    if LOGO_PATH.exists():
+        st.image(str(LOGO_PATH), use_container_width=True)
+    else:
+        st.markdown("## ✨ DocInsight AI")
 
+    st.caption("Your AI document learning assistant")
     st.markdown("---")
 
     # ======================================================
@@ -185,121 +209,443 @@ with st.sidebar:
     st.markdown("---")
 
     # ======================================================
-    # Appearance
+    # Chat Controls
     # ======================================================
+    # ======================================================
+# Appearance
+# ======================================================
     st.markdown("### 🎨 Appearance")
 
     dark_mode = st.toggle(
-        "🌙 Dark Mode",
-        value=st.session_state.dark_mode,
-        key="dark_mode_toggle"
-    )
+    "🌙 Dark Mode",
+    value=st.session_state.dark_mode
+)
+
     st.session_state.dark_mode = dark_mode
 
-    st.markdown("---")
+    st.markdown("---")    
+ # ==========================================================
+# Main Page / Landing State
+# ==========================================================
+
+logo_uri = image_to_data_uri(LOGO_PATH)
+
+# ==========================================================
+# AI Product Landing State
+# ==========================================================
+
+if not uploaded_files:
 
     # ======================================================
-    # Conversation
+    # Landing Page CSS
     # ======================================================
-    st.markdown("### 💬 Conversation")
 
-    if st.button("🗑️ Clear Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
+    st.markdown(
+        """
+<style>
 
-    st.caption("Powered by Gemini • FAISS • HuggingFace")
+/* ========================================================
+   LANDING PAGE CONTAINER
+======================================================== */
+
+.di-hero {
+    max-width: 1350px;
+    width: 92%;
+    margin: 35px auto 0 auto;
+    padding: 35px 30px 60px 30px;
+    text-align: center;
+}
 
 
-# ==========================================================
-# App Theme Styling
-# ==========================================================
+/* ========================================================
+   LOGO
+======================================================== */
 
-if st.session_state.dark_mode:
-    st.markdown("""
-    <style>
-    .stApp { background-color: #0e1117; color: #f3f4f6; }
-    [data-testid="stSidebar"] { background-color: #161b22; border-right: 1px solid #30363d; }
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] span { color: #e5e7eb !important; }
-    h1, h2, h3, h4 { color: #f8fafc !important; }
-    p, label { color: #d1d5db; }
-    .stButton > button, .stDownloadButton > button { background-color: #21262d; color: #f8fafc; border: 1px solid #30363d; border-radius: 10px; }
-    .stButton > button:hover, .stDownloadButton > button:hover { border-color: #8b5cf6; color: #ffffff; }
-    [data-baseweb="select"] > div, [data-baseweb="input"] > div, [data-testid="stTextArea"] textarea { background-color: #21262d !important; color: #f8fafc !important; }
-    [data-testid="stFileUploaderDropzone"] { background-color: #21262d; border-color: #30363d; }
-    [data-testid="stChatInput"] { background-color: #161b22; border-color: #30363d; }
-    [data-testid="stChatInput"] textarea { color: #f8fafc !important; }
-    [data-testid="stExpander"] { background-color: #161b22; border-color: #30363d; border-radius: 10px; }
-    hr { border-color: #30363d; }
-    </style>
-    """, unsafe_allow_html=True)
+.di-logo-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 4px;
+}
 
-# ==========================================================
-# Main Page
-# ==========================================================
-st.markdown("""
-<div style="padding: 12px 0 20px 0;">
-    <h1 style="margin-bottom: 4px;">📄 DocInsight AI</h1>
-    <p style="
-        font-size: 19px;
-        color: #6b7280;
-        margin-top: 0;
-        margin-bottom: 8px;
-    ">
-        Turn your documents into answers, insights, and practice.
-    </p>
-    <p style="
-        font-size: 13px;
-        color: #9ca3af;
-        margin-top: 0;
-    ">
-        AI-powered document learning • Multi-PDF Q&A • Summaries • Practice Generator
-    </p>
+.di-logo {
+    width: 125px;
+    height: 125px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto 14px auto;
+
+    animation:
+        logoPop 0.8s cubic-bezier(.34,1.56,.64,1),
+        logoFloat 4s ease-in-out 1s infinite;
+
+    filter:
+        drop-shadow(0px 12px 24px rgba(139,92,246,0.22));
+}
+
+.di-logo-fallback {
+    font-size: 70px;
+    text-align: center;
+    line-height: 1;
+    margin-bottom: 14px;
+
+    animation:
+        logoPop 0.8s cubic-bezier(.34,1.56,.64,1),
+        logoFloat 4s ease-in-out 1s infinite;
+}
+
+@keyframes logoPop {
+    0% {
+        opacity: 0;
+        transform: scale(0.35) translateY(25px);
+    }
+
+    70% {
+        opacity: 1;
+        transform: scale(1.10) translateY(-4px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes logoFloat {
+    0%, 100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-7px);
+    }
+}
+
+
+/* ========================================================
+   TITLE
+======================================================== */
+
+.di-title {
+    font-size: 64px;
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: -1.8px;
+
+    margin-top: 4px;
+    margin-bottom: 14px;
+
+    background: linear-gradient(
+        90deg,
+        #8b5cf6,
+        #6366f1,
+        #3b82f6
+    );
+
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+
+    animation: fadeUp 0.7s ease-out;
+}
+
+
+/* ========================================================
+   SUBTITLE
+======================================================== */
+
+.di-subtitle {
+    max-width: 900px;
+    margin: 0 auto 24px auto;
+
+    font-size: 20px;
+    line-height: 1.65;
+
+    color: #94a3b8;
+
+    animation: fadeUp 0.9s ease-out;
+}
+
+
+/* ========================================================
+   FEATURE CHIPS
+======================================================== */
+
+.di-chip-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    flex-wrap: wrap;
+    gap: 10px;
+
+    margin: 10px 0 38px 0;
+
+    animation: fadeUp 1s ease-out;
+}
+
+.di-chip {
+    padding: 8px 15px;
+
+    border-radius: 999px;
+
+    border: 1px solid rgba(139,92,246,0.25);
+
+    background: rgba(139,92,246,0.08);
+
+    font-size: 14px;
+    font-weight: 600;
+
+    color: #a78bfa;
+}
+
+
+/* ========================================================
+   FEATURE GRID
+======================================================== */
+
+.di-features {
+    display: grid;
+
+    grid-template-columns: repeat(4, 1fr);
+
+    gap: 22px;
+
+    margin-top: 10px;
+
+    text-align: left;
+
+    animation: fadeUp 1.1s ease-out;
+}
+
+
+/* ========================================================
+   FEATURE CARDS
+======================================================== */
+
+.di-card {
+    padding: 28px;
+    min-height: 190px;
+    border-radius: 18px;
+
+    border: 1px solid rgba(148,163,184,0.18);
+
+    background: rgba(255,255,255,0.025);
+
+    transition:
+        transform 0.25s ease,
+        border-color 0.25s ease,
+        box-shadow 0.25s ease,
+        background 0.25s ease;
+}
+
+.di-card:hover {
+    transform: translateY(-6px);
+
+    border-color: rgba(139,92,246,0.60);
+
+    background: rgba(139,92,246,0.055);
+
+    box-shadow:
+        0 16px 40px
+        rgba(0,0,0,0.13);
+}
+
+.di-card-icon {
+    font-size: 27px;
+    margin-bottom: 14px;
+}
+
+.di-card-title {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.di-card-text {
+    color: #94a3b8;
+
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+
+/* ========================================================
+   CTA
+======================================================== */
+
+.di-cta {
+    max-width: 650px;
+
+    margin: 38px auto 0 auto;
+
+    padding: 17px 24px;
+
+    border-radius: 15px;
+
+    border: 1px solid rgba(59,130,246,0.20);
+
+    background: linear-gradient(
+        90deg,
+        rgba(139,92,246,0.08),
+        rgba(59,130,246,0.08)
+    );
+
+    color: #94a3b8;
+
+    font-size: 14px;
+    line-height: 1.55;
+
+    animation: fadeUp 1.25s ease-out;
+}
+
+.di-cta strong {
+    font-size: 16px;
+    color: #a78bfa;
+}
+
+
+/* ========================================================
+   GENERAL ANIMATION
+======================================================== */
+
+@keyframes fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+/* ========================================================
+   TABLET
+======================================================== */
+
+@media (max-width: 1000px) {
+
+    .di-features {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .di-title {
+        font-size: 46px;
+    }
+}
+
+
+/* ========================================================
+   MOBILE
+======================================================== */
+
+@media (max-width: 650px) {
+
+    .di-hero {
+        padding: 20px 5px 35px 5px;
+    }
+
+    .di-title {
+        font-size: 38px;
+        letter-spacing: -1px;
+    }
+
+    .di-subtitle {
+        font-size: 16px;
+    }
+
+    .di-features {
+        grid-template-columns: 1fr;
+    }
+
+    .di-logo {
+        width: 85px;
+        height: 85px;
+    }
+
+    .di-logo-fallback {
+        font-size: 60px;
+    }
+}
+
+</style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # ======================================================
+    # Logo
+    # ======================================================
+
+    if logo_uri:
+        logo_html = (
+            f'<div class="di-logo-wrap">'
+            f'<img src="{logo_uri}" '
+            f'class="di-logo" '
+            f'alt="DocInsight AI Logo">'
+            f'</div>'
+        )
+    else:
+        logo_html = (
+            '<div class="di-logo-wrap">'
+            '<div class="di-logo-fallback">✨</div>'
+            '</div>'
+        )
+
+    # ======================================================
+    # Landing Page HTML
+    #
+    # IMPORTANT:
+    # Keep this HTML left-aligned inside the string.
+    # Indented HTML can be interpreted by Markdown as code.
+    # ======================================================
+
+    hero_html = f"""<div class="di-hero">
+{logo_html}
+<div class="di-title">DocInsight AI</div>
+<div class="di-subtitle">Turn documents into knowledge with AI.<br>Upload one or more PDFs, ask grounded questions, generate summaries, solve new problems using document concepts, and practice with interactive quizzes.</div>
+<div class="di-chip-row">
+<div class="di-chip">💬 Ask</div>
+<div class="di-chip">📝 Summarize</div>
+<div class="di-chip">🧠 Practice</div>
+<div class="di-chip">🔎 Search</div>
 </div>
-""", unsafe_allow_html=True)
+<div class="di-features">
+<div class="di-card">
+<div class="di-card-icon">💬</div>
+<div class="di-card-title">Ask Anything</div>
+<div class="di-card-text">Chat naturally with your PDFs and receive answers grounded in your uploaded documents.</div>
+</div>
+<div class="di-card">
+<div class="di-card-icon">🧩</div>
+<div class="di-card-title">Solve &amp; Reason</div>
+<div class="di-card-text">Apply formulas, methods, and concepts from your documents to new numerical problems and scenarios.</div>
+</div>
+<div class="di-card">
+<div class="di-card-icon">📝</div>
+<div class="di-card-title">Smart Summaries</div>
+<div class="di-card-text">Turn long PDFs into structured summaries containing key concepts, important findings, and conclusions.</div>
+</div>
+<div class="di-card">
+<div class="di-card-icon">🎯</div>
+<div class="di-card-title">Interactive Practice</div>
+<div class="di-card-text">Generate MCQs, numerical problems, conceptual questions, and case studies directly from your documents.</div>
+</div>
+</div>
+<div class="di-cta">
+<strong>Ready to learn?</strong><br>
+Upload your PDF(s) from the sidebar to open your AI-powered document workspace.
+</div>
+</div>"""
 
-# ==========================================================
-# Session State
-# ==========================================================
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "suggested_questions" not in st.session_state:
-    st.session_state.suggested_questions = []
-
-if "selected_question" not in st.session_state:
-    st.session_state.selected_question = None
-
-if "generate_summary" not in st.session_state:
-    st.session_state.generate_summary = False
-
-if "summary" not in st.session_state:
-    st.session_state.summary = ""
-
-if "generate_practice" not in st.session_state:
-    st.session_state.generate_practice = False
-
-if "practice_questions" not in st.session_state:
-    st.session_state.practice_questions = ""
-
-if "practice_answers" not in st.session_state:
-    st.session_state.practice_answers = ""
-
-if "show_practice_answers" not in st.session_state:
-    st.session_state.show_practice_answers = False
-
-if "practice_data" not in st.session_state:
-    st.session_state.practice_data = []
-
-if "practice_index" not in st.session_state:
-    st.session_state.practice_index = 0
-
-if "practice_results" not in st.session_state:
-    st.session_state.practice_results = []
-
-if "practice_submitted" not in st.session_state:
-    st.session_state.practice_submitted = False
-
+    st.markdown(
+        hero_html,
+        unsafe_allow_html=True
+    )
 # ==========================================================
 # Show PDF Summary
 # ==========================================================
@@ -308,35 +654,7 @@ if st.session_state.summary:
     with st.expander("📝 PDF Summary", expanded=True):
         st.markdown(st.session_state.summary)
 
-# ==========================================================
-# Download Conversation
-# ==========================================================
 
-chat_text = ""
-
-# Include the generated PDF summary in the downloaded conversation file.
-if st.session_state.summary:
-    chat_text += "PDF SUMMARY\n"
-    chat_text += "=" * 60
-    chat_text += "\n\n"
-    chat_text += st.session_state.summary
-    chat_text += "\n\n"
-    chat_text += "=" * 60
-    chat_text += "\nCONVERSATION\n"
-    chat_text += "=" * 60
-    chat_text += "\n\n"
-
-for msg in st.session_state.messages:
-
-    chat_text += f"{msg['role'].capitalize()}:\n"
-
-    chat_text += msg["content"]
-
-    chat_text += "\n\n"
-
-    chat_text += "-" * 60
-
-    chat_text += "\n\n"
 # ==========================================================
 # Build Vector Store
 # ==========================================================
@@ -831,6 +1149,7 @@ Return ONLY valid JSON:
      
 
      st.markdown("### 💡 Suggested Questions")
+     st.caption("Start with one of these document-grounded questions.")
 
      for i, q in enumerate(st.session_state.suggested_questions):
 
@@ -1063,15 +1382,34 @@ Answer:
             }
         )
 
+# ==========================================================
+# Download Conversation
+# ==========================================================
+
 if st.session_state.messages or st.session_state.summary:
+
+    chat_text = ""
+
+    if st.session_state.summary:
+        chat_text += "PDF SUMMARY\n"
+        chat_text += "=" * 60 + "\n\n"
+        chat_text += st.session_state.summary + "\n\n"
+        chat_text += "=" * 60 + "\n"
+        chat_text += "CONVERSATION\n"
+        chat_text += "=" * 60 + "\n\n"
+
+    for msg in st.session_state.messages:
+        role = msg.get("role", "").capitalize()
+        content = msg.get("content", "")
+
+        chat_text += f"{role}:\n"
+        chat_text += content + "\n\n"
+        chat_text += "-" * 60 + "\n\n"
 
     st.download_button(
         "⬇ Download Conversation",
         data=chat_text,
         file_name="conversation.txt",
-        mime="text/plain"
+        mime="text/plain",
+        use_container_width=True
     )
-
-else:
-
-    st.info("👈 Upload one or more PDFs from the sidebar to start chatting.")
