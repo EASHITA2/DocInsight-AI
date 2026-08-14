@@ -93,28 +93,68 @@ def render_grouped_sources(source_items, heading="📚 Sources"):
 
 
 # ==========================================================
-# Sidebar
+# Theme State
 # ==========================================================
 
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = True
+
+
+# ==========================================================
+# Sidebar
+# ==========================================================
 with st.sidebar:
 
-    st.title("📄 DocInsight AI")
+    # ======================================================
+    # Branding
+    # ======================================================
+    st.markdown("""
+    <div style="padding: 8px 0 5px 0;">
+        <h2 style="margin-bottom: 2px;">📄 DocInsight AI</h2>
+        <p style="
+            color: #6b7280;
+            font-size: 13px;
+            margin-top: 0;
+        ">
+            Your AI document learning assistant
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("---")
 
+    # ======================================================
+    # Upload
+    # ======================================================
+    st.markdown("### 📂 Documents")
+
     uploaded_files = st.file_uploader(
-        "Upload PDF(s)",
+        "Upload your PDFs",
         type="pdf",
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        help="Upload one or multiple PDF documents."
     )
 
-    # Summary button - available after one or more PDFs are selected
     if uploaded_files:
-        if st.button("📝 Summarize All PDFs", use_container_width=True):
+
+        st.caption(f"📚 {len(uploaded_files)} document(s) selected")
+
+        if st.button(
+            "📝 Summarize Documents",
+            use_container_width=True
+        ):
             st.session_state.generate_summary = True
 
         st.markdown("---")
-        st.subheader("🧠 Practice Generator")
+
+        # ==================================================
+        # Practice Generator
+        # ==================================================
+        st.markdown("### 🧠 Practice Generator")
+
+        st.caption(
+            "Create AI-generated questions from your uploaded documents."
+        )
 
         practice_type = st.selectbox(
             "Question Type",
@@ -136,27 +176,91 @@ with st.sidebar:
             key="practice_count"
         )
 
-        if st.button("🎯 Generate Practice", use_container_width=True):
+        if st.button(
+            "🎯 Generate Practice",
+            use_container_width=True
+        ):
             st.session_state.generate_practice = True
 
     st.markdown("---")
 
-    if st.button("🗑 Clear Chat"):
+    # ======================================================
+    # Appearance
+    # ======================================================
+    st.markdown("### 🎨 Appearance")
+
+    dark_mode = st.toggle(
+        "🌙 Dark Mode",
+        value=st.session_state.dark_mode,
+        key="dark_mode_toggle"
+    )
+    st.session_state.dark_mode = dark_mode
+
+    st.markdown("---")
+
+    # ======================================================
+    # Conversation
+    # ======================================================
+    st.markdown("### 💬 Conversation")
+
+    if st.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
-    
+
+    st.caption("Powered by Gemini • FAISS • HuggingFace")
+
+
+# ==========================================================
+# App Theme Styling
+# ==========================================================
+
+if st.session_state.dark_mode:
+    st.markdown("""
+    <style>
+    .stApp { background-color: #0e1117; color: #f3f4f6; }
+    [data-testid="stSidebar"] { background-color: #161b22; border-right: 1px solid #30363d; }
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] span { color: #e5e7eb !important; }
+    h1, h2, h3, h4 { color: #f8fafc !important; }
+    p, label { color: #d1d5db; }
+    .stButton > button, .stDownloadButton > button { background-color: #21262d; color: #f8fafc; border: 1px solid #30363d; border-radius: 10px; }
+    .stButton > button:hover, .stDownloadButton > button:hover { border-color: #8b5cf6; color: #ffffff; }
+    [data-baseweb="select"] > div, [data-baseweb="input"] > div, [data-testid="stTextArea"] textarea { background-color: #21262d !important; color: #f8fafc !important; }
+    [data-testid="stFileUploaderDropzone"] { background-color: #21262d; border-color: #30363d; }
+    [data-testid="stChatInput"] { background-color: #161b22; border-color: #30363d; }
+    [data-testid="stChatInput"] textarea { color: #f8fafc !important; }
+    [data-testid="stExpander"] { background-color: #161b22; border-color: #30363d; border-radius: 10px; }
+    hr { border-color: #30363d; }
+    </style>
+    """, unsafe_allow_html=True)
+
 # ==========================================================
 # Main Page
 # ==========================================================
-
-st.title("💬 Chat with your PDF")
-
-st.caption("Powered by Gemini + FAISS + HuggingFace")
+st.markdown("""
+<div style="padding: 12px 0 20px 0;">
+    <h1 style="margin-bottom: 4px;">📄 DocInsight AI</h1>
+    <p style="
+        font-size: 19px;
+        color: #6b7280;
+        margin-top: 0;
+        margin-bottom: 8px;
+    ">
+        Turn your documents into answers, insights, and practice.
+    </p>
+    <p style="
+        font-size: 13px;
+        color: #9ca3af;
+        margin-top: 0;
+    ">
+        AI-powered document learning • Multi-PDF Q&A • Summaries • Practice Generator
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # ==========================================================
 # Session State
 # ==========================================================
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -360,8 +464,10 @@ Context:
 
             st.session_state.suggested_questions = questions[:5]
 
-        except Exception:
+        except Exception as e:
+
             st.session_state.suggested_questions = []
+            st.warning(f"Suggested questions could not be generated: {e}")
 
     vectorstore = st.session_state.vectorstore
 
